@@ -4,11 +4,12 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import {
   Type, ListFilter, CheckSquare, Calendar, Hash, Mail, Save, Trash2,
   GripVertical, Heading1, AlignLeft, CircleDot, TextCursorInput, Minus,
-  ToggleLeft, Pencil, Eye, Code, Plus, X, ChevronDown, ChevronUp,
+  ToggleLeft, Pencil, Eye, Code, Plus, X, ChevronDown, ChevronUp, Monitor,
 } from 'lucide-react';
 import GlassCard from '../components/layout/GlassCard';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -443,6 +444,7 @@ type RightTab = 'preview' | 'json';
 // ─── Main Page ───────────────────────────────────────────────
 
 export default function UIDesignerPage() {
+  const isMobile = useIsMobile();
   const [canvasWidgets, setCanvasWidgets] = useState<WidgetInstance[]>(demoWidgets);
   const [activeWidget, setActiveWidget] = useState<WidgetDef | null>(null);
   const [rightTab, setRightTab] = useState<RightTab>('preview');
@@ -511,6 +513,20 @@ export default function UIDesignerPage() {
     label: categoryLabels[cat],
     items: palette.filter(w => w.category === cat),
   }));
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-6">
+        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
+          <Monitor size={28} className="text-white/20" />
+        </div>
+        <h3 className="text-white/60 font-semibold text-lg">Только на десктопе</h3>
+        <p className="text-white/30 text-sm max-w-xs">
+          UI Designer использует drag-and-drop канвас, который требует большой экран. Откройте на компьютере.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <DndContext sensors={sensors} modifiers={[restrictToWindowEdges]} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

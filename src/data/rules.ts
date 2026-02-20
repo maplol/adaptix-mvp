@@ -1,10 +1,8 @@
-export interface RuleBlock {
+export interface RuleCondition {
   id: string;
-  type: 'condition' | 'operator' | 'action';
-  field?: string;
-  op?: string;
-  value?: string;
-  label: string;
+  field: string;
+  op: string;
+  value: string;
 }
 
 export interface Rule {
@@ -12,21 +10,66 @@ export interface Rule {
   name: string;
   description: string;
   active: boolean;
-  blocks: RuleBlock[];
+  conditions: RuleCondition[];
+  actionId: string;
 }
+
+export interface ActionDef {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+export const actionDefs: ActionDef[] = [
+  {
+    id: 'block-assignment',
+    label: 'Блокировать назначение',
+    icon: 'ShieldBan',
+    color: 'red',
+    description: 'Запрещает назначение смены при нарушении условий',
+  },
+  {
+    id: 'allow-exchange',
+    label: 'Разрешить обмен',
+    icon: 'ArrowLeftRight',
+    color: 'emerald',
+    description: 'Автоматически разрешает обмен сменами',
+  },
+  {
+    id: 'notify-manager',
+    label: 'Уведомить менеджера',
+    icon: 'Bell',
+    color: 'amber',
+    description: 'Отправляет уведомление менеджеру при срабатывании',
+  },
+  {
+    id: 'require-approval',
+    label: 'Требовать подтверждение',
+    icon: 'CheckCircle',
+    color: 'violet',
+    description: 'Запрашивает ручное подтверждение от менеджера',
+  },
+  {
+    id: 'auto-approve',
+    label: 'Автоматически одобрить',
+    icon: 'Zap',
+    color: 'cyan',
+    description: 'Одобряет запрос автоматически при выполнении условий',
+  },
+];
 
 export const mockRules: Rule[] = [
   {
     id: 'r1',
     name: 'Проверка сертификата для операционной',
-    description: 'Блокирует назначение на операционную врача с просроченным сертификатом',
+    description: 'Блокирует врача с просроченным сертификатом',
     active: true,
-    blocks: [
-      { id: 'b1', type: 'condition', field: 'Смена.Тип', op: '==', value: 'Операционная', label: 'Смена.Тип == "Операционная"' },
-      { id: 'b2', type: 'operator', label: 'И' },
-      { id: 'b3', type: 'condition', field: 'Сертификат.Срок', op: '<', value: 'Сегодня', label: 'Сертификат.Срок < Сегодня' },
-      { id: 'b4', type: 'operator', label: 'ТО' },
-      { id: 'b5', type: 'action', label: 'Блокировать назначение' },
+    actionId: 'block-assignment',
+    conditions: [
+      { id: 'c1', field: 'Смена.Тип', op: '==', value: 'Операционная' },
+      { id: 'c2', field: 'Сертификат.Срок', op: '<', value: 'Сегодня' },
     ],
   },
   {
@@ -34,44 +77,57 @@ export const mockRules: Rule[] = [
     name: 'Ограничение длительности смены',
     description: 'Сотрудник не может работать более 12 часов подряд',
     active: true,
-    blocks: [
-      { id: 'b6', type: 'condition', field: 'Смена.Длительность', op: '>', value: '12', label: 'Смена.Длительность > 12 ч' },
-      { id: 'b7', type: 'operator', label: 'ТО' },
-      { id: 'b8', type: 'action', label: 'Блокировать назначение' },
+    actionId: 'block-assignment',
+    conditions: [
+      { id: 'c3', field: 'Смена.Длительность', op: '>', value: '12 ч' },
     ],
   },
   {
     id: 'r3',
-    name: 'Автоматический обмен сменами',
-    description: 'Разрешает обмен сменами между сотрудниками одной роли',
+    name: 'Перерыв между сменами (ТК РФ)',
+    description: 'Минимальный перерыв между сменами — 8 часов',
     active: true,
-    blocks: [
-      { id: 'b9', type: 'condition', field: 'Сотрудник_А.Роль', op: '==', value: 'Сотрудник_Б.Роль', label: 'Роль_А == Роль_Б' },
-      { id: 'b10', type: 'operator', label: 'ТО' },
-      { id: 'b11', type: 'action', label: 'Разрешить обмен' },
+    actionId: 'block-assignment',
+    conditions: [
+      { id: 'c4', field: 'Перерыв.Часы', op: '<', value: '8' },
     ],
   },
   {
     id: 'r4',
-    name: 'Перерыв между сменами (РФ)',
-    description: 'Минимальный перерыв между сменами — 8 часов',
+    name: 'Обмен между сотрудниками одной роли',
+    description: 'Разрешает обмен если роли совпадают',
     active: true,
-    blocks: [
-      { id: 'b12', type: 'condition', field: 'Перерыв.Часы', op: '<', value: '8', label: 'Перерыв < 8 часов' },
-      { id: 'b13', type: 'operator', label: 'ТО' },
-      { id: 'b14', type: 'action', label: 'Блокировать назначение' },
+    actionId: 'allow-exchange',
+    conditions: [
+      { id: 'c5', field: 'Сотрудник_А.Роль', op: '==', value: 'Сотрудник_Б.Роль' },
+    ],
+  },
+  {
+    id: 'r5',
+    name: 'Оповещение о переработке',
+    description: 'Уведомляет менеджера если сотрудник на больничном',
+    active: false,
+    actionId: 'notify-manager',
+    conditions: [
+      { id: 'c6', field: 'Сотрудник.Статус', op: '==', value: 'Больничный' },
+    ],
+  },
+  {
+    id: 'r6',
+    name: 'Авто-одобрение коротких смен',
+    description: 'Автоматически одобряет смены до 4 часов',
+    active: true,
+    actionId: 'auto-approve',
+    conditions: [
+      { id: 'c7', field: 'Смена.Длительность', op: '<=', value: '4 ч' },
     ],
   },
 ];
 
 export const conditionFields = [
   'Смена.Тип', 'Смена.Длительность', 'Сертификат.Срок', 'Сертификат.Категория',
-  'Сотрудник.Роль', 'Перерыв.Часы', 'Локация.Тип',
+  'Сотрудник.Роль', 'Сотрудник.Статус', 'Перерыв.Часы', 'Локация.Тип',
+  'Сотрудник_А.Роль', 'Сотрудник_Б.Роль',
 ];
 
 export const operators = ['==', '!=', '<', '>', '<=', '>='];
-
-export const actions = [
-  'Блокировать назначение', 'Разрешить обмен', 'Уведомить менеджера',
-  'Требовать подтверждение', 'Автоматически одобрить',
-];

@@ -2,7 +2,9 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar, { SidebarProvider } from './components/layout/Sidebar';
 import Header from './components/layout/Header';
+import BottomTabBar from './components/layout/BottomTabBar';
 import { ToastProvider } from './components/ui/Toast';
+import { useIsMobile } from './hooks/useIsMobile';
 
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -36,6 +38,19 @@ const pageTitles: Record<string, string> = {
 function AppLayout() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || 'Adaptix';
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full w-full relative z-10">
+        <Header title={title} />
+        <main className="flex-1 overflow-y-auto px-4 py-4 pb-20">
+          <Outlet />
+        </main>
+        <BottomTabBar />
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>

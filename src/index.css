@@ -104,6 +104,10 @@ body {
   }
 }
 
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 .toast-enter {
   animation: toast-in 0.3s ease-out;
 }

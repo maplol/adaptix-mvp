@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useAuth } from '../App';
 import { useToast } from '../components/ui/Toast';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const statusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'danger' }> = {
   active: { label: 'Активен', variant: 'success' },
@@ -125,6 +126,7 @@ function EditEmployeeModal({ open, onClose, employee, onSave }: {
 export default function EmployeesPage() {
   const { role } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const canEdit = role === 'admin' || role === 'manager';
 
   const [employeesList, setEmployeesList] = useState(initialEmployees);
@@ -177,63 +179,105 @@ export default function EmployeesPage() {
         <Badge variant="info">{filtered.length} сотрудников</Badge>
       </div>
 
-      <GlassCard className="!p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-white/40 text-left text-xs">
-              <th className="px-7 py-5 font-medium">Сотрудник</th>
-              <th className="px-6 py-5 font-medium">Должность</th>
-              <th className="px-6 py-5 font-medium">Локация</th>
-              <th className="px-6 py-5 font-medium">Статус</th>
-              <th className="px-6 py-5 font-medium">Сертификаты</th>
-              {canEdit && <th className="px-6 py-5 font-medium w-16"></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(emp => {
-              const st = statusMap[emp.status];
-              const expiredCerts = emp.certificates.filter(c => c.expired);
-              return (
-                <tr
-                  key={emp.id}
-                  onClick={() => setSelected(emp)}
-                  className="border-t border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
-                >
-                  <td className="px-7 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar src={emp.avatar} name={emp.name} size="sm" />
-                      <span className="text-white/80">{emp.name}</span>
+      {isMobile ? (
+        <div className="flex flex-col gap-2.5">
+          {filtered.map(emp => {
+            const st = statusMap[emp.status];
+            const expiredCerts = emp.certificates.filter(c => c.expired);
+            return (
+              <div
+                key={emp.id}
+                onClick={() => setSelected(emp)}
+                className="glass rounded-2xl p-3.5 active:bg-white/5 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar src={emp.avatar} name={emp.name} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/80 text-sm font-medium truncate">{emp.name}</span>
+                      <Badge variant={st.variant} className="text-[9px] px-1.5 py-0">{st.label}</Badge>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-white/60">{emp.position}</td>
-                  <td className="px-6 py-4 text-white/60">{emp.location}</td>
-                  <td className="px-6 py-4"><Badge variant={st.variant}>{st.label}</Badge></td>
-                  <td className="px-6 py-4">
+                    <p className="text-white/40 text-xs truncate">{emp.position} · {emp.location}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {expiredCerts.length > 0 ? (
-                      <Badge variant="danger">{expiredCerts.length} просрочен</Badge>
+                      <Badge variant="danger" className="text-[9px] px-1.5 py-0">{expiredCerts.length} просроч.</Badge>
                     ) : emp.certificates.length > 0 ? (
-                      <Badge variant="success">{emp.certificates.length} OK</Badge>
-                    ) : (
-                      <span className="text-white/30 text-xs">—</span>
-                    )}
-                  </td>
-                  {canEdit && (
-                    <td className="px-6 py-4">
+                      <Badge variant="success" className="text-[9px] px-1.5 py-0">{emp.certificates.length} OK</Badge>
+                    ) : null}
+                    {canEdit && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditing(emp); }}
-                        className="p-2 rounded-lg hover:bg-white/10 text-white/30 hover:text-cyan-400 transition-colors"
-                        title="Редактировать"
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/30"
                       >
-                        <Pencil size={14} />
+                        <Pencil size={12} />
                       </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <GlassCard className="!p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-white/40 text-left text-xs">
+                <th className="px-7 py-5 font-medium">Сотрудник</th>
+                <th className="px-6 py-5 font-medium">Должность</th>
+                <th className="px-6 py-5 font-medium">Локация</th>
+                <th className="px-6 py-5 font-medium">Статус</th>
+                <th className="px-6 py-5 font-medium">Сертификаты</th>
+                {canEdit && <th className="px-6 py-5 font-medium w-16"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(emp => {
+                const st = statusMap[emp.status];
+                const expiredCerts = emp.certificates.filter(c => c.expired);
+                return (
+                  <tr
+                    key={emp.id}
+                    onClick={() => setSelected(emp)}
+                    className="border-t border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                  >
+                    <td className="px-7 py-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={emp.avatar} name={emp.name} size="sm" />
+                        <span className="text-white/80">{emp.name}</span>
+                      </div>
                     </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </GlassCard>
+                    <td className="px-6 py-4 text-white/60">{emp.position}</td>
+                    <td className="px-6 py-4 text-white/60">{emp.location}</td>
+                    <td className="px-6 py-4"><Badge variant={st.variant}>{st.label}</Badge></td>
+                    <td className="px-6 py-4">
+                      {expiredCerts.length > 0 ? (
+                        <Badge variant="danger">{expiredCerts.length} просрочен</Badge>
+                      ) : emp.certificates.length > 0 ? (
+                        <Badge variant="success">{emp.certificates.length} OK</Badge>
+                      ) : (
+                        <span className="text-white/30 text-xs">—</span>
+                      )}
+                    </td>
+                    {canEdit && (
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditing(emp); }}
+                          className="p-2 rounded-lg hover:bg-white/10 text-white/30 hover:text-cyan-400 transition-colors"
+                          title="Редактировать"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </GlassCard>
+      )}
 
       {/* View Modal */}
       <Modal open={!!selected} onClose={() => setSelected(null)} title={selected?.name || ''}>

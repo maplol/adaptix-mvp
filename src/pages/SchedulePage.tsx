@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, KeyboardSensor, useSensors, useSensor, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Copy, ClipboardPaste, Trash2, CopyPlus, CalendarDays, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Copy, ClipboardPaste, Trash2, CopyPlus, CalendarDays, X, Clock, MapPin } from 'lucide-react';
 import { employees } from '../data/employees';
 import {
   shifts as initialShifts, shiftTypes, shiftLocations,
-  getMonday, getDateRange, getDayLabel, formatDateRange, navigatePeriod, fmt,
+  getMonday, getDateRange, getDayLabel, formatDateRange, navigatePeriod, fmt, addDays,
   type Shift, type ViewMode,
 } from '../data/shifts';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../App';
+import { useIsMobile } from '../hooks/useIsMobile';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -296,11 +297,212 @@ const viewModeLabels: Record<ViewMode, string> = {
   month: 'Месяц',
 };
 
+// ─── Mobile: Employee view (my shifts list) ──────────────────
+
+function MobileEmployeeSchedule({ shiftsList }: { shiftsList: Shift[] }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const monday = getMonday();
+  const start = addDays(monday, weekOffset * 7);
+  const dates = getDateRange(start, 'week');
+
+  const myShifts = shiftsList.filter(s => s.employeeId === 'e3');
+  const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  const monthNames = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const today = fmt(new Date());
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <button onClick={() => setWeekOffset(w => w - 1)} className="p-2 rounded-lg hover:bg-white/5 text-white/50">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-white/80 text-sm font-medium">{formatDateRange(start, 'week')}</span>
+          {weekOffset !== 0 && (
+            <button onClick={() => setWeekOffset(0)} className="text-cyan-400 text-xs mt-0.5">Текущая неделя</button>
+          )}
+        </div>
+        <button onClick={() => setWeekOffset(w => w + 1)} className="p-2 rounded-lg hover:bg-white/5 text-white/50">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {dates.map(date => {
+          const dayShifts = myShifts.filter(s => s.date === date);
+          const d = new Date(date + 'T00:00:00');
+          const isToday = date === today;
+          return (
+            <div key={date} className={`rounded-2xl p-3 ${isToday ? 'glass-strong ring-1 ring-cyan-400/20' : 'glass'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-xs font-medium ${isToday ? 'text-cyan-400' : 'text-white/50'}`}>
+                  {dayNames[d.getDay()]}
+                </span>
+                <span className={`text-sm font-semibold ${isToday ? 'text-cyan-400' : 'text-white/80'}`}>
+                  {d.getDate()} {monthNames[d.getMonth()]}
+                </span>
+                {isToday && <Badge variant="info" className="text-[9px] px-1.5 py-0">Сегодня</Badge>}
+              </div>
+              {dayShifts.length === 0 ? (
+                <p className="text-white/20 text-xs py-2">Нет смен</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {dayShifts.map(shift => {
+                    const cls = shiftColors[shift.type] || 'bg-white/10 border-white/20 text-white/70';
+                    return (
+                      <div key={shift.id} className={`rounded-xl border p-3 ${cls}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm">{shift.type}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs opacity-80">
+                          <span className="flex items-center gap-1"><Clock size={11} />{shift.startTime}–{shift.endTime}</span>
+                          <span className="flex items-center gap-1"><MapPin size={11} />{shift.location}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile: Manager/Admin day view ───────────────────────────
+
+function MobileManagerSchedule({ shiftsList, onCreateShift, onEditShift, onDeleteShift }: {
+  shiftsList: Shift[];
+  onCreateShift: (empId: string, date: string) => void;
+  onEditShift: (shiftId: string, empId: string, date: string) => void;
+  onDeleteShift: (id: string) => void;
+}) {
+  const [dayOffset, setDayOffset] = useState(0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentDate = addDays(today, dayOffset);
+  const dateStr = fmt(currentDate);
+  const todayStr = fmt(new Date());
+
+  const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const monthNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+  const displayEmployees = employees.filter(e => e.appRole !== 'admin');
+  const isToday = dateStr === todayStr;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <button onClick={() => setDayOffset(d => d - 1)} className="p-2 rounded-lg hover:bg-white/5 text-white/50">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-white/80 text-sm font-medium">
+            {currentDate.getDate()} {monthNames[currentDate.getMonth()]}
+          </span>
+          <span className="text-white/40 text-xs">{dayNames[currentDate.getDay()]}</span>
+          {!isToday && (
+            <button onClick={() => setDayOffset(0)} className="text-cyan-400 text-xs mt-0.5">Сегодня</button>
+          )}
+        </div>
+        <button onClick={() => setDayOffset(d => d + 1)} className="p-2 rounded-lg hover:bg-white/5 text-white/50">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      <div className="flex overflow-x-auto gap-1 pb-1 -mx-1 px-1">
+        {Array.from({ length: 7 }, (_, i) => {
+          const d = addDays(today, dayOffset - 3 + i);
+          const ds = fmt(d);
+          const isSel = ds === dateStr;
+          const isT = ds === todayStr;
+          return (
+            <button
+              key={ds}
+              onClick={() => setDayOffset(dayOffset - 3 + i)}
+              className={`flex flex-col items-center px-3 py-2 rounded-xl min-w-[44px] transition-colors ${
+                isSel ? 'bg-cyan-400/15 text-cyan-400' : isT ? 'text-cyan-400/60' : 'text-white/40'
+              }`}
+            >
+              <span className="text-[10px]">{['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()]}</span>
+              <span className="text-sm font-semibold">{d.getDate()}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {displayEmployees.map(emp => {
+          const empShifts = shiftsList.filter(s => s.employeeId === emp.id && s.date === dateStr);
+          return (
+            <div key={emp.id} className="glass rounded-2xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                    {emp.name.split(' ').map(w => w[0]).join('')}
+                  </div>
+                  <div>
+                    <div className="text-white/80 text-xs font-medium">{emp.name}</div>
+                    <div className="text-white/30 text-[10px]">{emp.position}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onCreateShift(emp.id, dateStr)}
+                  className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 active:bg-cyan-500/20"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+              {empShifts.length === 0 ? (
+                <p className="text-white/15 text-xs pl-9">Нет смен</p>
+              ) : (
+                <div className="flex flex-col gap-1.5 pl-9">
+                  {empShifts.map(shift => {
+                    const cls = shiftColors[shift.type] || 'bg-white/10 border-white/20 text-white/70';
+                    return (
+                      <div key={shift.id} className={`rounded-xl border p-2.5 flex items-center justify-between ${cls}`}>
+                        <div>
+                          <div className="font-semibold text-xs">{shift.type}</div>
+                          <div className="text-[10px] opacity-70 flex items-center gap-2 mt-0.5">
+                            <span className="flex items-center gap-0.5"><Clock size={9} />{shift.startTime}–{shift.endTime}</span>
+                            <span className="flex items-center gap-0.5"><MapPin size={9} />{shift.location}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => onEditShift(shift.id, emp.id, dateStr)}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/30"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => onDeleteShift(shift.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/30"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── SchedulePage ─────────────────────────────────────────────
 
 export default function SchedulePage() {
   const { role } = useAuth();
   const canEdit = role === 'admin' || role === 'manager';
+  const isMobile = useIsMobile();
   const { toast } = useToast();
 
   const [shiftsList, setShiftsList] = useState(initialShifts);
@@ -447,6 +649,35 @@ export default function SchedulePage() {
   // ── render ──────────────────────────────────────────────────
 
   const empColWidth = 190;
+
+  if (isMobile) {
+    return (
+      <>
+        {role === 'employee' ? (
+          <MobileEmployeeSchedule shiftsList={shiftsList} />
+        ) : (
+          <MobileManagerSchedule
+            shiftsList={shiftsList}
+            onCreateShift={(empId, date) => setShiftModal({ open: true, empId, date })}
+            onEditShift={(shiftId, empId, date) => setShiftModal({ open: true, editId: shiftId, empId, date })}
+            onDeleteShift={deleteShift}
+          />
+        )}
+        {shiftModal && (
+          <ShiftModal
+            open={shiftModal.open}
+            title={shiftModal.editId ? 'Редактировать смену' : 'Создать смену'}
+            initial={getModalInitial()}
+            onClose={() => setShiftModal(null)}
+            onSave={(data) => {
+              if (shiftModal.editId) updateShift(shiftModal.editId, data);
+              else createShift(data);
+            }}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <DndContext sensors={sensors} modifiers={[restrictToWindowEdges]} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
