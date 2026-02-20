@@ -71,7 +71,7 @@ export default function App() {
     <AuthContext.Provider value={{ role, setRole }}>
       <ToastProvider>
         <div className="bg-blobs" />
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
             <Route path="/" element={<LoginPage />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
