@@ -37,7 +37,7 @@ export default function Sidebar() {
   const { role, setRole } = useAuth();
   const navigate = useNavigate();
   const { collapsed, toggle } = useSidebar();
-  const links = allLinks.filter(l => l.roles.includes(role));
+  const links = allLinks.filter(l => role && l.roles.includes(role));
 
   return (
     <aside
